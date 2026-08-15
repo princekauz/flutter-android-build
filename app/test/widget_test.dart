@@ -1,5 +1,4 @@
-# Sample widget test
-import 'package:flutter/material.dart';
+// Sample widget test
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:flutter_android_build_demo/main.dart';
