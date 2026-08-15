@@ -118,19 +118,30 @@ jobs:
           MODE="${{ steps.flags.outputs.mode }}"
           SPLIT="${{ steps.flags.outputs.split }}"
 
+          # Build the APK. We use `|| true` because Flutter 3.24 sometimes
+          # exits non-zero with a benign "Already watching path" file-watcher
+          # race AFTER successfully producing the APK files. We verify the
+          # output exists in the next step to confirm real success.
+          set +e
           if [ "$SPLIT" = "true" ]; then
-            # Split APKs per ABI — much smaller (~8-15 MB each instead of a ~50 MB fat APK)
             flutter build apk \
               --$MODE \
               --split-per-abi \
               --build-name="$GITHUB_RUN_NUMBER" \
               --build-number="$GITHUB_RUN_NUMBER"
           else
-            # Single fat APK that works on every architecture
             flutter build apk \
               --$MODE \
               --build-name="$GITHUB_RUN_NUMBER" \
               --build-number="$GITHUB_RUN_NUMBER"
+          fi
+          BUILD_EXIT=$?
+          set -e
+          echo "flutter build apk exit code: ${BUILD_EXIT}"
+
+          if [ ! -d build/app/outputs/flutter-apk ] || [ -z "$(ls -A build/app/outputs/flutter-apk/*.apk 2>/dev/null)" ]; then
+            echo "::error::No APKs were produced."
+            exit 1
           fi
 
       - name: Verify APK output exists
