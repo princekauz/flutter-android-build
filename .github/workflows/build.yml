@@ -35,21 +35,24 @@ env:
   JAVA_VERSION: "17"
 
 jobs:
+  # ────────────────────────────────────────────────────────────────────
+  # Job 1: Build the APK
+  # ────────────────────────────────────────────────────────────────────
   build:
     name: Build APK (${{ github.event.inputs.build_mode || 'release' }})
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
     permissions:
-      contents: write   # needed to commit docs/latest.json + history.json back to the repo
-      pages: write      # reserved for future official Pages deployment
-      id-token: write   # reserved for future official Pages deployment
+      contents: read   # only need to read the repo
+      pages: write     # needed so the 'pages' job can deploy
+      id-token: write  # OIDC token for official Pages deployment
 
     steps:
       - name: Checkout source
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0   # full history so we can read commit metadata
+          fetch-depth: 0
 
       - name: Set up JDK ${{ env.JAVA_VERSION }}
         uses: actions/setup-java@v4
@@ -80,7 +83,7 @@ jobs:
           path: |
             ~/.gradle/caches
             ~/.gradle/wrapper
-          key: gradle-${{ runner.os }}-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          key: gradle-${{ runner.os }}-${{ hashFiles('app/**/*.gradle*', 'app/**/gradle-wrapper.properties') }}
           restore-keys: |
             gradle-${{ runner.os }}-
 
@@ -118,42 +121,36 @@ jobs:
           MODE="${{ steps.flags.outputs.mode }}"
           SPLIT="${{ steps.flags.outputs.split }}"
 
-          # Build the APK. We use `|| true` because Flutter 3.24 sometimes
-          # exits non-zero with a benign "Already watching path" file-watcher
-          # race AFTER successfully producing the APK files. We verify the
-          # output exists in the next step to confirm real success.
-          set +e
+          # We don't `set -e` because Flutter 3.24 sometimes exits non-zero
+          # with a benign "Already watching path" file-watcher race AFTER
+          # successfully producing the APK files. We verify the output
+          # exists below to confirm real success.
           if [ "$SPLIT" = "true" ]; then
             flutter build apk \
               --$MODE \
               --split-per-abi \
               --build-name="$GITHUB_RUN_NUMBER" \
-              --build-number="$GITHUB_RUN_NUMBER"
+              --build-number="$GITHUB_RUN_NUMBER" || true
           else
             flutter build apk \
               --$MODE \
               --build-name="$GITHUB_RUN_NUMBER" \
-              --build-number="$GITHUB_RUN_NUMBER"
+              --build-number="$GITHUB_RUN_NUMBER" || true
           fi
-          BUILD_EXIT=$?
-          set -e
-          echo "flutter build apk exit code: ${BUILD_EXIT}"
 
           if [ ! -d build/app/outputs/flutter-apk ] || [ -z "$(ls -A build/app/outputs/flutter-apk/*.apk 2>/dev/null)" ]; then
             echo "::error::No APKs were produced."
             exit 1
           fi
 
-      - name: Verify APK output exists
-        working-directory: app
-        run: |
           echo "--- APKs produced ---"
           find build/app/outputs/flutter-apk -name "*.apk" -exec ls -lh {} \;
 
       - name: Compute APK metadata (size + SHA256)
         id: meta
+        working-directory: app
         run: |
-          mkdir -p build-info
+          mkdir -p ../build-info
           cd build/app/outputs/flutter-apk
           : > ../../../build-info/apks.txt
           for apk in *.apk; do
@@ -167,6 +164,7 @@ jobs:
           echo "apk_count=$(wc -l < build-info/apks.txt | tr -d ' ')" >> "$GITHUB_OUTPUT"
 
       - name: Build metadata JSON
+        working-directory: app
         env:
           RUN_ID: ${{ github.run_id }}
           RUN_NUMBER: ${{ github.run_number }}
@@ -185,54 +183,28 @@ jobs:
           STARTED_AT: ${{ github.event.head_commit.timestamp }}
           REPOSITORY: ${{ github.repository }}
           SERVER_URL: ${{ github.server_url }}
-          CONCLUSION: ${{ job.status }}
-        run: python3 scripts/build_metadata.py
+          CONCLUSION: success
+        run: python3 ../scripts/build_metadata.py
 
       - name: Upload APKs as workflow artifacts
         uses: actions/upload-artifact@v4
         with:
           name: flutter-apks-${{ github.run_number }}
-          path: build/app/outputs/flutter-apk/*.apk
+          path: app/build/app/outputs/flutter-apk/*.apk
           retention-days: 30
           if-no-files-found: error
 
-      - name: Merge into docs/history.json
-        run: python3 scripts/update_history.py
-
-      - name: Publish status to docs/ for GitHub Pages
-        run: |
-          set -e
-          cd "$GITHUB_WORKSPACE"
-          mkdir -p docs
-          # latest.json is what the dashboard renders as "Latest build"
-          cp build-info/meta.json docs/latest.json
-          # builds.json — artifact URLs per ABI for the download buttons
-          if [ ! -f docs/builds.json ] || [ "$(stat -c%s docs/builds.json 2>/dev/null || echo 0)" -lt 3 ]; then
-            echo '[]' > docs/builds.json
-          fi
-
-      - name: Commit status files back to the repo
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          set -e
-          cd "$GITHUB_WORKSPACE"
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-
-          git add docs/latest.json docs/history.json docs/builds.json
-
-          if git diff --cached --quiet; then
-            echo "No docs changes to commit."
-            exit 0
-          fi
-
-          git commit -m "ci: update build status (run #${{ github.run_number }})"
-          git push
+      - name: Upload build metadata for the pages job
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-info-${{ github.run_number }}
+          path: build-info/meta.json
+          retention-days: 30
 
       - name: Build summary
         if: always()
         run: |
+          cd "$GITHUB_WORKSPACE/app"
           {
             echo "## Build summary"
             echo ""
@@ -243,11 +215,123 @@ jobs:
             echo "| Author | ${{ github.event.head_commit.author.name }} |"
             echo "| Mode | ${{ steps.flags.outputs.mode }} (split-per-ABI: ${{ steps.flags.outputs.split }}) |"
             echo "| Flutter | ${{ env.FLUTTER_VERSION }} |"
+            echo "| Conclusion | ${{ job.status }} |"
             echo ""
             echo "### Artifacts"
             echo ""
-            ls -lh build/app/outputs/flutter-apk/*.apk | awk '{print "- `"$NF"` — "$5}'
+            ls -lh build/app/outputs/flutter-apk/*.apk 2>/dev/null | awk '{print "- `"$NF"` — "$5}' || echo "_No APKs produced._"
             echo ""
             echo "📥 **[Download from Actions tab](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})**"
             echo "🌐 **[Open the dashboard](https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/)**"
           } >> "$GITHUB_STEP_SUMMARY"
+
+  # ────────────────────────────────────────────────────────────────────
+  # Job 2: Deploy the status dashboard to GitHub Pages
+  # ────────────────────────────────────────────────────────────────────
+  pages:
+    name: Deploy status dashboard
+    runs-on: ubuntu-latest
+    needs: build
+    if: success()
+    timeout-minutes: 5
+
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Checkout source (for the dashboard files)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python (for the merge scripts)
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Download build metadata
+        uses: actions/download-artifact@v4
+        with:
+          name: build-info-${{ github.run_number }}
+          path: build-info
+          run-id: ${{ github.run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Merge into history.json (rolling 50 builds)
+        run: |
+          # Pull previous history if it exists in the repo
+          if [ -f docs/history.json ]; then
+            cp docs/history.json history.json
+          else
+            echo '[]' > history.json
+          fi
+
+          python3 - <<'PY'
+          import json, os, datetime, subprocess
+
+          NEW_FILE = "build-info/meta.json"
+          HISTORY_FILE = "history.json"
+          KEEP = 50
+
+          new_entry = json.load(open(NEW_FILE))
+          history = []
+          if os.path.exists(HISTORY_FILE) and os.path.getsize(HISTORY_FILE) > 2:
+              try:
+                  history = json.load(open(HISTORY_FILE))
+                  if not isinstance(history, list):
+                      history = []
+              except Exception:
+                  history = []
+
+          history = [h for h in history if h.get("run_id") != new_entry.get("run_id")]
+          history.insert(0, new_entry)
+          history = history[:KEEP]
+          json.dump(history, open(HISTORY_FILE, "w"), indent=2)
+          print(f"Wrote {HISTORY_FILE} with {len(history)} build(s)")
+          PY
+
+      - name: Stage Pages artifacts
+        run: |
+          mkdir -p _pages
+          # Static dashboard files
+          cp docs/index.html _pages/
+          cp docs/style.css _pages/
+          cp docs/app.js _pages/
+          cp docs/.nojekyll _pages/ 2>/dev/null || true
+          # Live data files
+          cp build-info/meta.json _pages/latest.json
+          cp history.json _pages/history.json
+          # builds.json (artifact URLs for the dashboard)
+          python3 - <<'PY'
+          import json
+          run_id = "${{ github.run_id }}"
+          repo   = "${{ github.repository }}"
+          meta   = json.load(open("build-info/meta.json"))
+          builds = []
+          for apk in meta.get("apks", []):
+              builds.append({
+                  "file": apk["file"],
+                  "size": apk["size"],
+                  "sha256": apk["sha256"],
+                  "abi": apk["file"].split("-")[-1].replace(".apk", "") if "-" in apk["file"] else "universal",
+                  "download_url": f"https://github.com/{repo}/actions/runs/{run_id}/artifacts",
+              })
+          json.dump(builds, open("_pages/builds.json", "w"), indent=2)
+          print(f"Wrote _pages/builds.json with {len(builds)} entry/entries")
+          PY
+          ls -la _pages/
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _pages
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
