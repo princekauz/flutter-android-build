@@ -168,8 +168,10 @@ jobs:
           echo "apk_count=$(wc -l < build-info/apks.txt | tr -d ' ')" >> "$GITHUB_OUTPUT"
 
       - name: Build metadata JSON
-        working-directory: app
+        working-directory: .
         env:
+          APKS_FILE: build-info/apks.txt
+          OUT_FILE: build-info/meta.json
           RUN_ID: ${{ github.run_id }}
           RUN_NUMBER: ${{ github.run_number }}
           WORKFLOW: ${{ github.workflow }}
@@ -188,7 +190,7 @@ jobs:
           REPOSITORY: ${{ github.repository }}
           SERVER_URL: ${{ github.server_url }}
           CONCLUSION: success
-        run: python3 ../scripts/build_metadata.py
+        run: python3 scripts/build_metadata.py
 
       - name: Upload APKs as workflow artifacts
         uses: actions/upload-artifact@v4
