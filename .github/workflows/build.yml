@@ -84,6 +84,13 @@ jobs:
           restore-keys: |
             gradle-${{ runner.os }}-
 
+      - name: Generate local.properties (points Gradle at Flutter SDK)
+        working-directory: app/android
+        run: |
+          echo "sdk.dir=${ANDROID_SDK_ROOT:-${ANDROID_HOME:-/opt/android-sdk}}" > local.properties
+          echo "flutter.sdk=${FLUTTER_ROOT:-/opt/hostedtoolcache/flutter/stable-${FLUTTER_VERSION}-x64/flutter}" >> local.properties
+          cat local.properties
+
       - name: flutter pub get
         working-directory: app
         run: flutter pub get
