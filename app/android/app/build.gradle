@@ -6,7 +6,7 @@ plugins {
 }
 
 android {
-    namespace = "com.example.flutter_android_build_demo"
+    namespace = "com.example.ai_assistant"
     compileSdk = 34
     ndkVersion = flutter.ndkVersion
 
@@ -20,7 +20,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.example.flutter_android_build_demo"
+        applicationId = "com.example.ai_assistant"
         minSdk = 21
         targetSdk = 34
         versionCode = 1

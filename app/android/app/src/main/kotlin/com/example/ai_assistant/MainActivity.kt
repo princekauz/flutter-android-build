@@ -1,4 +1,4 @@
-package com.example.flutter_android_build_demo
+package com.example.ai_assistant
 
 import io.flutter.embedding.android.FlutterActivity
 

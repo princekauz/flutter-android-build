@@ -1,7 +1,7 @@
-name: flutter_android_build_demo
-description: "Demo Flutter app for the GitHub Actions Android APK build pipeline."
+name: ai_assistant
+description: "AI-powered personal productivity app — chat, calendar, lists."
 publish_to: 'none'
-version: 1.0.0+1
+version: 0.1.0+0
 
 environment:
   sdk: ^3.5.0
@@ -10,7 +10,15 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  cupertino_icons: ^1.0.8
+
+  # State management — Riverpod 2.x (no codegen for Phase 0)
+  flutter_riverpod: ^2.5.1
+
+  # Date / time helpers
+  intl: ^0.19.0
+
+  # AI backend — hidden WebView wrapping QuillBot's internal API
+  webview_flutter: ^4.10.0
 
 dev_dependencies:
   flutter_test:
