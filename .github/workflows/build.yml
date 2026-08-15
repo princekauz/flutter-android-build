@@ -1,0 +1,235 @@
+name: Build Flutter Android APK
+
+on:
+  # Trigger on every push to main
+  push:
+    branches: [main]
+  # Allow manual trigger from the Actions tab (useful when iterating locally)
+  workflow_dispatch:
+    inputs:
+      build_mode:
+        description: 'Flutter build mode'
+        required: true
+        default: 'release'
+        type: choice
+        options:
+          - release
+          - profile
+          - debug
+      split_per_abi:
+        description: 'Build separate APKs per ABI (smaller files)'
+        required: true
+        default: 'true'
+        type: choice
+        options:
+          - 'true'
+          - 'false'
+
+concurrency:
+  # Cancel any in-flight build when a new push arrives — saves CI minutes
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  FLUTTER_VERSION: "3.24.3"
+  JAVA_VERSION: "17"
+
+jobs:
+  build:
+    name: Build APK (${{ github.event.inputs.build_mode || 'release' }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    permissions:
+      contents: write   # needed to commit docs/latest.json + history.json back to the repo
+      pages: write      # reserved for future official Pages deployment
+      id-token: write   # reserved for future official Pages deployment
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # full history so we can read commit metadata
+
+      - name: Set up JDK ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+
+      - name: Setup Flutter SDK
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - name: Show tool versions
+        run: |
+          flutter --version
+          java -version
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT"
+
+      - name: Install Android SDK components
+        uses: android-actions/setup-android@v3
+
+      - name: Cache Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ runner.os }}-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          restore-keys: |
+            gradle-${{ runner.os }}-
+
+      - name: flutter pub get
+        working-directory: app
+        run: flutter pub get
+
+      - name: flutter analyze
+        working-directory: app
+        run: flutter analyze --no-fatal-infos
+
+      - name: flutter test (best-effort)
+        working-directory: app
+        run: flutter test --no-pub --reporter expanded
+        continue-on-error: true
+
+      - name: Determine build flags
+        id: flags
+        run: |
+          MODE="${{ github.event.inputs.build_mode || 'release' }}"
+          SPLIT="${{ github.event.inputs.split_per_abi || 'true' }}"
+          echo "mode=$MODE" >> "$GITHUB_OUTPUT"
+          echo "split=$SPLIT" >> "$GITHUB_OUTPUT"
+
+      - name: Build APK
+        working-directory: app
+        run: |
+          MODE="${{ steps.flags.outputs.mode }}"
+          SPLIT="${{ steps.flags.outputs.split }}"
+
+          if [ "$SPLIT" = "true" ]; then
+            # Split APKs per ABI — much smaller (~8-15 MB each instead of a ~50 MB fat APK)
+            flutter build apk \
+              --$MODE \
+              --split-per-abi \
+              --build-name="$GITHUB_RUN_NUMBER" \
+              --build-number="$GITHUB_RUN_NUMBER"
+          else
+            # Single fat APK that works on every architecture
+            flutter build apk \
+              --$MODE \
+              --build-name="$GITHUB_RUN_NUMBER" \
+              --build-number="$GITHUB_RUN_NUMBER"
+          fi
+
+      - name: Verify APK output exists
+        working-directory: app
+        run: |
+          echo "--- APKs produced ---"
+          find build/app/outputs/flutter-apk -name "*.apk" -exec ls -lh {} \;
+
+      - name: Compute APK metadata (size + SHA256)
+        id: meta
+        run: |
+          mkdir -p build-info
+          cd build/app/outputs/flutter-apk
+          : > ../../../build-info/apks.txt
+          for apk in *.apk; do
+            SIZE=$(stat -c%s "$apk")
+            SHA=$(sha256sum "$apk" | awk '{print $1}')
+            PKG=$(aapt dump badging "$apk" 2>/dev/null | grep '^package:' | head -1 | sed -E "s/.*name='([^']+)'.*/\1/")
+            VER=$(aapt dump badging "$apk" 2>/dev/null | grep '^package:' | head -1 | sed -E "s/.*versionName='([^']+)'.*/\1/")
+            echo "${apk}|${SIZE}|${SHA}|${PKG}|${VER}" >> ../../../build-info/apks.txt
+          done
+          cd "$GITHUB_WORKSPACE"
+          echo "apk_count=$(wc -l < build-info/apks.txt | tr -d ' ')" >> "$GITHUB_OUTPUT"
+
+      - name: Build metadata JSON
+        env:
+          RUN_ID: ${{ github.run_id }}
+          RUN_NUMBER: ${{ github.run_number }}
+          WORKFLOW: ${{ github.workflow }}
+          REF: ${{ github.ref }}
+          REF_NAME: ${{ github.ref_name }}
+          SHA: ${{ github.sha }}
+          SHA_SHORT: ${{ github.sha }}
+          COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
+          COMMIT_AUTHOR: ${{ github.event.head_commit.author.name }}
+          ACTOR: ${{ github.actor }}
+          BUILD_MODE: ${{ steps.flags.outputs.mode }}
+          SPLIT_PER_ABI: ${{ steps.flags.outputs.split }}
+          FLUTTER_VERSION: ${{ env.FLUTTER_VERSION }}
+          JAVA_VERSION: ${{ env.JAVA_VERSION }}
+          STARTED_AT: ${{ github.event.head_commit.timestamp }}
+          REPOSITORY: ${{ github.repository }}
+          SERVER_URL: ${{ github.server_url }}
+          CONCLUSION: ${{ job.status }}
+        run: python3 scripts/build_metadata.py
+
+      - name: Upload APKs as workflow artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: flutter-apks-${{ github.run_number }}
+          path: build/app/outputs/flutter-apk/*.apk
+          retention-days: 30
+          if-no-files-found: error
+
+      - name: Merge into docs/history.json
+        run: python3 scripts/update_history.py
+
+      - name: Publish status to docs/ for GitHub Pages
+        run: |
+          set -e
+          cd "$GITHUB_WORKSPACE"
+          mkdir -p docs
+          # latest.json is what the dashboard renders as "Latest build"
+          cp build-info/meta.json docs/latest.json
+          # builds.json — artifact URLs per ABI for the download buttons
+          if [ ! -f docs/builds.json ] || [ "$(stat -c%s docs/builds.json 2>/dev/null || echo 0)" -lt 3 ]; then
+            echo '[]' > docs/builds.json
+          fi
+
+      - name: Commit status files back to the repo
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+          cd "$GITHUB_WORKSPACE"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git add docs/latest.json docs/history.json docs/builds.json
+
+          if git diff --cached --quiet; then
+            echo "No docs changes to commit."
+            exit 0
+          fi
+
+          git commit -m "ci: update build status (run #${{ github.run_number }})"
+          git push
+
+      - name: Build summary
+        if: always()
+        run: |
+          {
+            echo "## Build summary"
+            echo ""
+            echo "| Field | Value |"
+            echo "|---|---|"
+            echo "| Run | [#${{ github.run_number }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) |"
+            echo "| Commit | \`${{ github.sha_short }}\` — ${{ github.event.head_commit.message }} |"
+            echo "| Author | ${{ github.event.head_commit.author.name }} |"
+            echo "| Mode | ${{ steps.flags.outputs.mode }} (split-per-ABI: ${{ steps.flags.outputs.split }}) |"
+            echo "| Flutter | ${{ env.FLUTTER_VERSION }} |"
+            echo ""
+            echo "### Artifacts"
+            echo ""
+            ls -lh build/app/outputs/flutter-apk/*.apk | awk '{print "- `"$NF"` — "$5}'
+            echo ""
+            echo "📥 **[Download from Actions tab](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})**"
+            echo "🌐 **[Open the dashboard](https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/)**"
+          } >> "$GITHUB_STEP_SUMMARY"

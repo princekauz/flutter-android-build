@@ -1,0 +1,22 @@
+{
+  "run_id": null,
+  "run_number": 0,
+  "workflow": "Build Flutter Android APK",
+  "ref": "refs/heads/main",
+  "ref_name": "main",
+  "sha": "",
+  "short_sha": "",
+  "commit_message": "No builds yet. Push to main to trigger the first build.",
+  "commit_author": "",
+  "actor": "",
+  "build_mode": "release",
+  "split_per_abi": "true",
+  "flutter_version": "3.24.3",
+  "java_version": "17",
+  "started_at": null,
+  "finished_at": null,
+  "repository": "",
+  "server_url": "https://github.com",
+  "conclusion": "pending",
+  "apks": []
+}
