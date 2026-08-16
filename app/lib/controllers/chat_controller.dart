@@ -7,6 +7,7 @@ import 'package:sqflite/sqflite.dart';
 import '../commands/command_executor.dart';
 import '../commands/command_parser.dart';
 import '../models/chat_message.dart';
+import '../providers/entity_lists_provider.dart';
 import '../providers/providers.dart';
 import '../repositories/chat_repository.dart';
 import '../repositories/entity_repositories.dart';
@@ -57,15 +58,18 @@ class ChatController extends StateNotifier<ChatState> {
   ChatRepository _repo;
   EntityRepositories? _entities;
   CommandExecutor? _executor;
+  EntityListsRefresher? _entityListsRefresher;
   final CommandParser _parser;
 
   void attachRepository(ChatRepository repo) {
     _repo = repo;
   }
 
-  void attachEntities(EntityRepositories entities, CommandExecutor executor) {
+  void attachEntities(EntityRepositories entities, CommandExecutor executor,
+      EntityListsRefresher refresher) {
     _entities = entities;
     _executor = executor;
+    _entityListsRefresher = refresher;
   }
 
   bool get isReady => _repo is! _NoopRepo && _entities != null;
@@ -126,6 +130,11 @@ class ChatController extends StateNotifier<ChatState> {
     final results = parsed.hasCommands && _executor != null
         ? await _executor!.executeAll(parsed.commands)
         : <CommandResult>[];
+
+    // Refresh the in-memory entity cache so the Lists screen rebuilds.
+    if (results.any((r) => r.success) && _entityListsRefresher != null) {
+      await _entityListsRefresher!();
+    }
 
     // Compose the assistant message: user-facing text + command summary.
     final composed = _composeAssistantText(parsed, results);

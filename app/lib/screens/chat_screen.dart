@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../controllers/chat_controller.dart';
+import '../providers/entity_lists_provider.dart';
 import '../providers/providers.dart';
 import '../services/ai_service.dart';
 import '../widgets/message_bubble.dart';
@@ -52,8 +53,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   }
 
   /// Called once the database provider resolves — attach the real repo,
-  /// the entity repositories, and the command executor to the controller.
-  /// Then load history.
+  /// the entity repositories, the command executor, and the entity-list
+  /// refresher to the controller. Then load history.
   void _attachRepoIfReady(ChatController controller, bool dbReady) {
     if (!dbReady || _dbWaitStarted) return;
     _dbWaitStarted = true;
@@ -61,8 +62,13 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       final repo = await ref.read(chatRepositoryProvider.future);
       final entities = await ref.read(entityRepositoriesProvider.future);
       final executor = await ref.read(commandExecutorProvider.future);
+      // Build a refresher that triggers a re-fetch in the entity lists notifier.
+      Future<void> refresher() async {
+        ref.read(entityListsProvider.notifier).bumpVersion();
+        await ref.read(entityListsProvider.notifier).load();
+      }
       controller.attachRepository(repo);
-      controller.attachEntities(entities, executor);
+      controller.attachEntities(entities, executor, refresher);
       await controller.load();
       if (mounted) _scrollToBottom();
     });
