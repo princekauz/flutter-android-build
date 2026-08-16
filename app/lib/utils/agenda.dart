@@ -1,3 +1,5 @@
+import 'package:flutter/material.dart';
+
 import '../models/bill.dart';
 import '../models/recurring_expense.dart';
 import '../models/reminder.dart';
@@ -48,7 +50,7 @@ List<TimelineEntry> buildAgenda({
       kind: TimelineKind.reminder,
       id: r.id,
       title: r.title,
-      subtitle: r.category ?? r.notes,
+      subtitle: r.category,
       when: r.remindAt,
       time: TimeOfDay(hour: r.remindAt.hour, minute: r.remindAt.minute),
       isDone: r.isDone,
