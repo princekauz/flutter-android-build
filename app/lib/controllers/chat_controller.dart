@@ -2,12 +2,14 @@ import 'dart:convert';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:sqflite/sqflite.dart';
 
 import '../commands/command_executor.dart';
 import '../commands/command_parser.dart';
 import '../models/chat_message.dart';
 import '../providers/providers.dart';
 import '../repositories/chat_repository.dart';
+import '../repositories/entity_repositories.dart';
 import '../services/ai_service.dart';
 import '../storage/app_database.dart';
 
