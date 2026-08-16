@@ -318,15 +318,6 @@ class CreateRecurringExpense extends Command {
       );
 }
 
-class DeleteRecurringExpense extends Command {
-  @override
-  String get actionName => 'DELETE_RECURRING_EXPENSE';
-  final String? id;
-  final String? title;
-  final String? label;
-  const DeleteRecurringExpense({this.id, this.title, this.label});
-}
-
 // ─────────────────────────────────────────────────────────────────────────
 // Reminders
 
