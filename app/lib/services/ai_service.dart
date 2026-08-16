@@ -186,6 +186,18 @@ Required JSON Structure:
     }
   }
 
+  /// Phase 1 addition: free-form chat with optional system context.
+  /// Wraps the existing private `_sendDirectApiRequest` so callers don't
+  /// need to know about the underlying JSON contract. Returns the assistant's
+  /// raw text reply. Throws on network/parse failure (callers should catch).
+  Future<String> chat(String userMessage, {String? systemContext}) async {
+    if (!_isInitialized) initialize();
+    final prompt = systemContext == null || systemContext.isEmpty
+        ? userMessage
+        : '$systemContext\n\n$userMessage';
+    return _sendDirectApiRequest(prompt);
+  }
+
   Future<String> _sendDirectApiRequest(String text) async {
     _responseCompleter = Completer<String>();
     final safeText = jsonEncode(text);
