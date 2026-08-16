@@ -1,7 +1,7 @@
 name: ai_assistant
 description: "AI-powered personal productivity app — chat, calendar, lists."
 publish_to: 'none'
-version: 0.4.0+3
+version: 0.5.0+4
 
 environment:
   sdk: ^3.5.0
