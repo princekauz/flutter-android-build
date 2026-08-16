@@ -13,6 +13,8 @@ import '../repositories/chat_repository.dart';
 import '../repositories/entity_repositories.dart';
 import '../services/ai_service.dart';
 import '../storage/app_database.dart';
+import '../utils/conversation_context.dart';
+import '../utils/snapshot.dart';
 
 /// State of the chat screen.
 class ChatState {
@@ -60,6 +62,7 @@ class ChatController extends StateNotifier<ChatState> {
   CommandExecutor? _executor;
   EntityListsRefresher? _entityListsRefresher;
   final CommandParser _parser;
+  ConversationContext _conversation = ConversationContext.empty;
 
   void attachRepository(ChatRepository repo) {
     _repo = repo;
@@ -136,6 +139,19 @@ class ChatController extends StateNotifier<ChatState> {
       await _entityListsRefresher!();
     }
 
+    // Update conversation context: the LAST successful command that
+    // resolved an entity becomes "it" for the next turn.
+    final lastResolved = results
+        .where((r) => r.success && r.resolvedId != null)
+        .lastOrNull;
+    if (lastResolved != null) {
+      _conversation = _conversation.referencing(
+        id: lastResolved.resolvedId!,
+        title: lastResolved.resolvedTitle ?? '',
+        kind: lastResolved.resolvedKind ?? 'entity',
+      );
+    }
+
     // Compose the assistant message: user-facing text + command summary.
     final composed = _composeAssistantText(parsed, results);
 
@@ -170,20 +186,9 @@ class ChatController extends StateNotifier<ChatState> {
   // System prompt
 
   Future<String> _buildSystemContext() async {
-    // Snapshot all entities so the AI can reference them by ID or title.
-    final snap = <String, dynamic>{
-      'current_date': DateFormat('yyyy-MM-dd').format(DateTime.now()),
-      'day_of_week': _dayName(DateTime.now().weekday),
-      'phase': '2 — full CRUD on tasks, habits, expenses, reminders, bills, '
-          'custom lists. The AI returns commands as JSON; the app executes '
-          'them. The AI speaks conversationally in plain text to the user.',
-      'entities': await _snapshotEntities(),
-    };
-    return jsonEncode(snap);
-  }
-
-  Future<Map<String, dynamic>> _snapshotEntities() async {
     final repo = _entities!;
+    // Read all entities to build both a structured snapshot AND a
+    // pre-computed aggregate view (totals, upcoming, overdue).
     final tasks = await repo.listTasks();
     final habits = await repo.listHabits();
     final expenses = await repo.listExpenses();
@@ -192,6 +197,53 @@ class ChatController extends StateNotifier<ChatState> {
     final bills = await repo.listBills();
     final lists = await repo.listCustomLists();
 
+    final snapshot = DataSnapshot(
+      generatedAt: DateTime.now(),
+      tasks: tasks,
+      habits: habits,
+      expenses: expenses,
+      recurringExpenses: recurring,
+      reminders: reminders,
+      bills: bills,
+    );
+
+    final entities = await _snapshotEntities(
+      tasks: tasks,
+      habits: habits,
+      expenses: expenses,
+      recurring: recurring,
+      reminders: reminders,
+      bills: bills,
+      lists: lists,
+    );
+
+    final snap = <String, dynamic>{
+      'current_date': DateFormat('yyyy-MM-dd').format(DateTime.now()),
+      'day_of_week': _dayName(DateTime.now().weekday),
+      'entities': entities,
+      'aggregate_view': snapshot.toMarkdown(),
+      'conversation': {
+        'last_referenced': _conversation.lastReferencedId == null
+            ? null
+            : {
+                'id': _conversation.lastReferencedId,
+                'title': _conversation.lastReferencedTitle,
+                'kind': _conversation.lastReferencedKind,
+              },
+      },
+    };
+    return jsonEncode(snap);
+  }
+
+  Future<Map<String, dynamic>> _snapshotEntities({
+    required List<dynamic> tasks,
+    required List<dynamic> habits,
+    required List<dynamic> expenses,
+    required List<dynamic> recurring,
+    required List<dynamic> reminders,
+    required List<dynamic> bills,
+    required List<dynamic> lists,
+  }) async {
     return {
       'tasks': tasks
           .map((t) => {
@@ -247,11 +299,10 @@ class ChatController extends StateNotifier<ChatState> {
   }
 
   String _buildPrompt(String userText, String systemContextJson) {
-    // Decoded for readability in the AI's view.
     return '''
 You are a personal AI productivity assistant. You manage the user's tasks, habits, expenses, reminders, bills, and custom lists.
 
-When the user wants to ADD, CHANGE, or REMOVE something, you return a JSON block of commands wrapped in \`\`\`json fences, optionally followed by a short friendly confirmation message. When the user just wants to chat or ask a question (no data changes), you reply in plain text only — no commands.
+When the user wants to ADD, CHANGE, or REMOVE something, you return a JSON block of commands wrapped in ```json fences, optionally followed by a short friendly confirmation message. When the user just wants to chat or ask a question (no data changes), you reply in plain text only — no commands.
 
 Available actions:
 - CREATE_TASK / UPDATE_TASK / DELETE_TASK / MARK_TASK_COMPLETE
@@ -260,7 +311,7 @@ Available actions:
 - CREATE_RECURRING_EXPENSE / DELETE_RECURRING_EXPENSE
 - CREATE_REMINDER / UPDATE_REMINDER / DELETE_REMINDER
 - CREATE_BILL / DELETE_BILL
-- CREATE_CUSTOM_LIST / DELETE_CUSTOM_LIST / ADD_CUSTOM_LIST_ITEM / REMOVE_CUSTOM_LIST_ITEM
+- CREATE_CUSTOM_LIST / UPDATE_CUSTOM_LIST / DELETE_CUSTOM_LIST / ADD_CUSTOM_LIST_ITEM / REMOVE_CUSTOM_LIST_ITEM
 
 Date fields accept ISO format: "YYYY-MM-DD" or full ISO datetimes.
 - For "tomorrow" / "next Friday" / etc., resolve against `current_date` below.
@@ -268,20 +319,33 @@ Date fields accept ISO format: "YYYY-MM-DD" or full ISO datetimes.
 
 ID handling:
 - For CREATE actions, omit `id` — the app generates one.
-- For UPDATE / DELETE / MARK_COMPLETE, include the `id` from the entity snapshot below. If the user said "delete it" referring to a prior command, use the most recent matching id.
-- You can match by title as a fallback (the app will search).
+- For UPDATE / DELETE / MARK_COMPLETE, include either the `id` OR `title` of the target. Title matching is case-insensitive substring — prefer exact match when possible.
+- If the user refers to something with "it" or "that", resolve using the `conversation.last_referenced` field below.
+- For DELETE_EXPENSE / DELETE_RECURRING_EXPENSE, use either `title` or `label`.
+
+Resolving references:
+- When user says "delete it" / "mark it done" / "move it to Friday" after a prior command, use `conversation.last_referenced.id` or `.title`.
+- When user says "delete the rent bill" / "remove Netflix", use title-based lookup with `title` field.
+- For follow-up updates like "make it urgent", use `MARK_TASK_COMPLETE` no — use `UPDATE_TASK` with the priority field.
+
+Query handling (no commands needed):
+- "what's on my plate tomorrow?" → read the `aggregate_view` "Upcoming" section.
+- "how much did I spend this week?" → read `aggregate_view` "Expenses" → "This week".
+- "what bills are due?" → read `aggregate_view` "Upcoming" → filter `[bill]` entries.
+- "what's overdue?" → read `aggregate_view` "Overdue" section.
+- Just answer from the snapshot; no JSON block needed.
 
 Format your reply as either:
-1. Plain text only (when no data changes needed).
+1. Plain text only (when no data changes needed — answers, conversation).
 2. A JSON block followed by a short confirmation:
-\`\`\`json
+```json
 [
   {"action": "CREATE_TASK", "title": "Call mom", "due_date": "2026-08-17"}
 ]
-\`\`\`
+```
 Added "Call mom" for Sunday. Anything else?
 
-Current app state:
+Current app state (includes aggregate view + full entity list + conversation context):
 $systemContextJson
 
 User: $userText

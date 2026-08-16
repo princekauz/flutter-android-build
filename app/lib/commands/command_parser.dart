@@ -113,9 +113,15 @@ class CommandParser {
                 json['recurrence'] == null && json.containsKey('recurrence'),
           );
         case 'DELETE_TASK':
-          return DeleteTask(id);
+          return DeleteTask(
+            id: (json['id'] as String?),
+            title: json['title'] as String?,
+          );
         case 'MARK_TASK_COMPLETE':
-          return MarkTaskComplete(id);
+          return MarkTaskComplete(
+            id: (json['id'] as String?),
+            title: json['title'] as String?,
+          );
 
         // Habits
         case 'CREATE_HABIT':
@@ -133,7 +139,10 @@ class CommandParser {
             isPaused: json['is_paused'] as bool?,
           );
         case 'DELETE_HABIT':
-          return DeleteHabit(id);
+          return DeleteHabit(
+            id: (json['id'] as String?),
+            title: json['title'] as String?,
+          );
 
         // Expenses
         case 'CREATE_EXPENSE':
@@ -157,7 +166,11 @@ class CommandParser {
             isPlanned: json['is_planned'] as bool?,
           );
         case 'DELETE_EXPENSE':
-          return DeleteExpense(id);
+          return DeleteExpense(
+            id: (json['id'] as String?),
+            title: json['title'] as String?,
+            label: json['label'] as String?,
+          );
 
         // Recurring expenses
         case 'CREATE_RECURRING_EXPENSE':
@@ -169,8 +182,21 @@ class CommandParser {
             nextDue: _parseDate(json['next_due']) ?? DateTime.now(),
             category: json['category'] as String?,
           );
+        case 'UPDATE_RECURRING_EXPENSE':
+          return UpdateRecurringExpense(
+            id: id,
+            label: json['label'] as String?,
+            amount: (json['amount'] as num?)?.toDouble(),
+            cadence: json['cadence'] as String?,
+            nextDue: _parseDate(json['next_due']),
+            category: json['category'] as String?,
+          );
         case 'DELETE_RECURRING_EXPENSE':
-          return DeleteRecurringExpense(id);
+          return DeleteRecurringExpense(
+            id: (json['id'] as String?),
+            label: json['label'] as String?,
+            title: json['title'] as String?,
+          );
 
         // Reminders
         case 'CREATE_REMINDER':
@@ -195,7 +221,10 @@ class CommandParser {
                 json['cadence'] == null && json.containsKey('cadence'),
           );
         case 'DELETE_REMINDER':
-          return DeleteReminder(id);
+          return DeleteReminder(
+            id: (json['id'] as String?),
+            title: json['title'] as String?,
+          );
 
         // Bills
         case 'CREATE_BILL':
@@ -207,8 +236,20 @@ class CommandParser {
             cadence: json['cadence'] as String?,
             category: json['category'] as String?,
           );
+        case 'UPDATE_BILL':
+          return UpdateBill(
+            id: id,
+            title: json['title'] as String?,
+            amount: (json['amount'] as num?)?.toDouble(),
+            dueOn: _parseDate(json['due_on']),
+            cadence: json['cadence'] as String?,
+            category: json['category'] as String?,
+          );
         case 'DELETE_BILL':
-          return DeleteBill(id);
+          return DeleteBill(
+            id: (json['id'] as String?),
+            title: json['title'] as String?,
+          );
 
         // Custom lists
         case 'CREATE_CUSTOM_LIST':
@@ -217,8 +258,18 @@ class CommandParser {
             title: (json['title'] as String?) ?? '(untitled)',
             emoji: json['emoji'] as String?,
           );
+        case 'UPDATE_CUSTOM_LIST':
+          return UpdateCustomList(
+            id: id,
+            title: json['title'] as String?,
+            emoji: json['emoji'] as String?,
+            clearEmoji: json['emoji'] == null && json.containsKey('emoji'),
+          );
         case 'DELETE_CUSTOM_LIST':
-          return DeleteCustomList(id);
+          return DeleteCustomList(
+            id: (json['id'] as String?),
+            title: json['title'] as String?,
+          );
         case 'ADD_CUSTOM_LIST_ITEM':
           return AddCustomListItem(
             id: id,
@@ -227,7 +278,11 @@ class CommandParser {
             position: (json['position'] as int?) ?? 0,
           );
         case 'REMOVE_CUSTOM_LIST_ITEM':
-          return RemoveCustomListItem(id);
+          return RemoveCustomListItem(
+            id: (json['id'] as String?),
+            label: json['label'] as String?,
+            listTitle: json['list_title'] as String?,
+          );
       }
     } catch (e) {
       // Field type mismatch etc.

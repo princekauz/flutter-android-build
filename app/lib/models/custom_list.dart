@@ -15,16 +15,17 @@ class CustomList {
   });
 
   CustomList copyWith({
-    String? id,
-    String? title,
-    String? emoji,
-    DateTime? createdAt,
-    DateTime? updatedAt,
-  }) {
+   String? id,
+   String? title,
+   String? emoji,
+   DateTime? createdAt,
+   DateTime? updatedAt,
+   bool clearEmoji = false,
+ }) {
     return CustomList(
       id: id ?? this.id,
       title: title ?? this.title,
-      emoji: emoji ?? this.emoji,
+      emoji: clearEmoji ? null : (emoji ?? this.emoji),
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );

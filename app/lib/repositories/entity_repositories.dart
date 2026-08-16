@@ -75,6 +75,13 @@ class EntityRepositories {
     return rows.map(Expense.fromRow).toList();
   }
 
+  Future<Expense?> getExpense(String id) async {
+    final rows = await _raw.query('expenses',
+        where: 'id = ?', whereArgs: [id], limit: 1);
+    if (rows.isEmpty) return null;
+    return Expense.fromRow(rows.first);
+  }
+
   Future<void> upsertExpense(Expense expense) async {
     await _raw.insert('expenses', expense.toRow(),
         conflictAlgorithm: ConflictAlgorithm.replace);
@@ -93,9 +100,25 @@ class EntityRepositories {
     return rows.map(RecurringExpense.fromRow).toList();
   }
 
+  Future<RecurringExpense?> getRecurring(String id) async {
+    final rows = await _raw.query('recurring_expenses',
+        where: 'id = ?', whereArgs: [id], limit: 1);
+    if (rows.isEmpty) return null;
+    return RecurringExpense.fromRow(rows.first);
+  }
+
+  Future<void> upsertRecurring(RecurringExpense r) async {
+    await _raw.insert('recurring_expenses', r.toRow(),
+        conflictAlgorithm: ConflictAlgorithm.replace);
+  }
+
   Future<void> upsertRecurringExpense(RecurringExpense r) async {
     await _raw.insert('recurring_expenses', r.toRow(),
         conflictAlgorithm: ConflictAlgorithm.replace);
+  }
+
+  Future<void> deleteRecurring(String id) async {
+    await _raw.delete('recurring_expenses', where: 'id = ?', whereArgs: [id]);
   }
 
   Future<void> deleteRecurringExpense(String id) async {
@@ -108,6 +131,13 @@ class EntityRepositories {
   Future<List<Reminder>> listReminders() async {
     final rows = await _raw.query('reminders', orderBy: 'remind_at ASC');
     return rows.map(Reminder.fromRow).toList();
+  }
+
+  Future<Reminder?> getReminder(String id) async {
+    final rows = await _raw.query('reminders',
+        where: 'id = ?', whereArgs: [id], limit: 1);
+    if (rows.isEmpty) return null;
+    return Reminder.fromRow(rows.first);
   }
 
   Future<void> upsertReminder(Reminder r) async {
@@ -127,6 +157,13 @@ class EntityRepositories {
     return rows.map(Bill.fromRow).toList();
   }
 
+  Future<Bill?> getBill(String id) async {
+    final rows = await _raw.query('bills',
+        where: 'id = ?', whereArgs: [id], limit: 1);
+    if (rows.isEmpty) return null;
+    return Bill.fromRow(rows.first);
+  }
+
   Future<void> upsertBill(Bill b) async {
     await _raw.insert('bills', b.toRow(),
         conflictAlgorithm: ConflictAlgorithm.replace);
@@ -144,13 +181,35 @@ class EntityRepositories {
     return rows.map(CustomList.fromRow).toList();
   }
 
+  Future<CustomList?> getList(String id) async {
+    final rows = await _raw.query('custom_lists',
+        where: 'id = ?', whereArgs: [id], limit: 1);
+    if (rows.isEmpty) return null;
+    return CustomList.fromRow(rows.first);
+  }
+
+  Future<void> upsertList(CustomList l) async {
+    await _raw.insert('custom_lists', l.toRow(),
+        conflictAlgorithm: ConflictAlgorithm.replace);
+  }
+
   Future<void> upsertCustomList(CustomList l) async {
     await _raw.insert('custom_lists', l.toRow(),
         conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
+  Future<void> deleteList(String id) async {
+    await _raw.delete('custom_lists', where: 'id = ?', whereArgs: [id]);
+  }
+
   Future<void> deleteCustomList(String id) async {
     await _raw.delete('custom_lists', where: 'id = ?', whereArgs: [id]);
+  }
+
+  Future<List<CustomListItem>> listItems() async {
+    final rows = await _raw.query('custom_list_items',
+        orderBy: 'created_at ASC');
+    return rows.map(CustomListItem.fromRow).toList();
   }
 
   Future<List<CustomListItem>> listItemsForList(String listId) async {
@@ -163,9 +222,18 @@ class EntityRepositories {
     return rows.map(CustomListItem.fromRow).toList();
   }
 
+  Future<void> upsertItem(CustomListItem item) async {
+    await _raw.insert('custom_list_items', item.toRow(),
+        conflictAlgorithm: ConflictAlgorithm.replace);
+  }
+
   Future<void> upsertCustomListItem(CustomListItem item) async {
     await _raw.insert('custom_list_items', item.toRow(),
         conflictAlgorithm: ConflictAlgorithm.replace);
+  }
+
+  Future<void> deleteItem(String id) async {
+    await _raw.delete('custom_list_items', where: 'id = ?', whereArgs: [id]);
   }
 
   Future<void> deleteCustomListItem(String id) async {

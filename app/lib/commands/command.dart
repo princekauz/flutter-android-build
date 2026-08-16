@@ -101,15 +101,18 @@ class UpdateTask extends Command {
 class DeleteTask extends Command {
   @override
   String get actionName => 'DELETE_TASK';
-  final String id;
-  const DeleteTask(this.id);
+  /// Either `id` or `title` must be set. If both are set, `id` wins.
+  final String? id;
+  final String? title;
+  const DeleteTask({this.id, this.title});
 }
 
 class MarkTaskComplete extends Command {
   @override
   String get actionName => 'MARK_TASK_COMPLETE';
-  final String id;
-  const MarkTaskComplete(this.id);
+  final String? id;
+  final String? title;
+  const MarkTaskComplete({this.id, this.title});
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -156,8 +159,9 @@ class UpdateHabit extends Command {
 class DeleteHabit extends Command {
   @override
   String get actionName => 'DELETE_HABIT';
-  final String id;
-  const DeleteHabit(this.id);
+  final String? id;
+  final String? title;
+  const DeleteHabit({this.id, this.title});
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -222,9 +226,62 @@ class UpdateExpense extends Command {
 class DeleteExpense extends Command {
   @override
   String get actionName => 'DELETE_EXPENSE';
-  final String id;
-  const DeleteExpense(this.id);
+  final String? id;
+  /// Title-based lookup (any of these will match).
+  final String? title;
+  final String? label;
+  const DeleteExpense({this.id, this.title, this.label});
 }
+
+class DeleteRecurringExpense extends Command {
+  @override
+  String get actionName => 'DELETE_RECURRING_EXPENSE';
+  final String? id;
+  final String? title;
+  final String? label;
+  const DeleteRecurringExpense({this.id, this.title, this.label});
+}
+
+class UpdateRecurringExpense extends Command {
+  @override
+  String get actionName => 'UPDATE_RECURRING_EXPENSE';
+  final String id;
+  final String? label;
+  final double? amount;
+  final String? cadence;
+  final DateTime? nextDue;
+  final String? category;
+
+  const UpdateRecurringExpense({
+    required this.id,
+    this.label,
+    this.amount,
+    this.cadence,
+    this.nextDue,
+    this.category,
+  });
+}
+
+class UpdateBill extends Command {
+  @override
+  String get actionName => 'UPDATE_BILL';
+  final String id;
+  final String? title;
+  final double? amount;
+  final DateTime? dueOn;
+  final String? cadence;
+  final String? category;
+
+  const UpdateBill({
+    required this.id,
+    this.title,
+    this.amount,
+    this.dueOn,
+    this.cadence,
+    this.category,
+  });
+}
+
 
 // ─────────────────────────────────────────────────────────────────────────
 // Recurring expenses
@@ -264,8 +321,10 @@ class CreateRecurringExpense extends Command {
 class DeleteRecurringExpense extends Command {
   @override
   String get actionName => 'DELETE_RECURRING_EXPENSE';
-  final String id;
-  const DeleteRecurringExpense(this.id);
+  final String? id;
+  final String? title;
+  final String? label;
+  const DeleteRecurringExpense({this.id, this.title, this.label});
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -329,8 +388,9 @@ class UpdateReminder extends Command {
 class DeleteReminder extends Command {
   @override
   String get actionName => 'DELETE_REMINDER';
-  final String id;
-  const DeleteReminder(this.id);
+  final String? id;
+  final String? title;
+  const DeleteReminder({this.id, this.title});
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -370,8 +430,9 @@ class CreateBill extends Command {
 class DeleteBill extends Command {
   @override
   String get actionName => 'DELETE_BILL';
-  final String id;
-  const DeleteBill(this.id);
+  final String? id;
+  final String? title;
+  const DeleteBill({this.id, this.title});
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -399,11 +460,27 @@ class CreateCustomList extends Command {
       );
 }
 
+class UpdateCustomList extends Command {
+  @override
+  String get actionName => 'UPDATE_CUSTOM_LIST';
+  final String id;
+  final String? title;
+  final String? emoji;
+  final bool clearEmoji;
+  const UpdateCustomList({
+    required this.id,
+    this.title,
+    this.emoji,
+    this.clearEmoji = false,
+  });
+}
+
 class DeleteCustomList extends Command {
   @override
   String get actionName => 'DELETE_CUSTOM_LIST';
-  final String id;
-  const DeleteCustomList(this.id);
+  final String? id;
+  final String? title;
+  const DeleteCustomList({this.id, this.title});
 }
 
 class AddCustomListItem extends Command {
@@ -434,6 +511,8 @@ class AddCustomListItem extends Command {
 class RemoveCustomListItem extends Command {
   @override
   String get actionName => 'REMOVE_CUSTOM_LIST_ITEM';
-  final String id;
-  const RemoveCustomListItem(this.id);
+  final String? id;
+  final String? label;
+  final String? listTitle;
+  const RemoveCustomListItem({this.id, this.label, this.listTitle});
 }
