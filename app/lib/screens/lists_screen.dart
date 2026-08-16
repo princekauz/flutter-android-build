@@ -2,11 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
-import '../models/bill.dart';
 import '../models/custom_list.dart';
 import '../models/expense.dart';
-import '../models/habit.dart';
-import '../models/reminder.dart';
 import '../models/task.dart';
 import '../providers/entity_lists_provider.dart';
 import '../repositories/entity_repositories.dart';
@@ -793,27 +790,29 @@ class _CustomListItemsViewState extends ConsumerState<_CustomListItemsView> {
                   await widget.notifier.deleteItem(item.id);
                   if (mounted) _refresh();
                 },
-                child: CheckboxListTile(
-                  value: item.isDone,
-                  onChanged: (_) async {
-                    await widget.notifier.upsertItem(
-                        item.copyWith(isDone: !item.isDone));
-                    if (mounted) _refresh();
-                  },
-                  title: Text(
-                    item.label,
-                    style: TextStyle(
-                      decoration:
-                          item.isDone ? TextDecoration.lineThrough : null,
-                    ),
-                  ),
-                  controlAffinity: ListTileControlAffinity.leading,
+                child: GestureDetector(
                   onLongPress: () => showCustomListItemEditor(
                     context,
                     widget.notifier.repo,
                     list: widget.list,
                     existing: item,
                     onChanged: _refresh,
+                  ),
+                  child: CheckboxListTile(
+                    value: item.isDone,
+                    onChanged: (_) async {
+                      await widget.notifier.upsertItem(
+                          item.copyWith(isDone: !item.isDone));
+                      if (mounted) _refresh();
+                    },
+                    title: Text(
+                      item.label,
+                      style: TextStyle(
+                        decoration:
+                            item.isDone ? TextDecoration.lineThrough : null,
+                      ),
+                    ),
+                    controlAffinity: ListTileControlAffinity.leading,
                   ),
                 ),
               );

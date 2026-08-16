@@ -161,7 +161,7 @@ Future<void> showHabitEditor(
       sizedBoxH,
       FormSection(title: 'Recurrence', children: [
         DropdownButtonFormField<RecurrenceType>(
-          initialValue: recType,
+          value: recType,
           decoration: const InputDecoration(
             border: OutlineInputBorder(),
           ),
@@ -215,7 +215,7 @@ Future<void> showHabitEditor(
               SizedBox(
                 width: 80,
                 child: TextFormField(
-                  initialValue: intervalDays.toString(),
+                  value: intervalDays.toString(),
                   keyboardType: TextInputType.number,
                   decoration: const InputDecoration(
                     border: OutlineInputBorder(),
@@ -445,7 +445,7 @@ Future<void> showRecurringExpenseEditor(
       ),
       sizedBoxH,
       DropdownButtonFormField<String>(
-        initialValue: cadence,
+        value: cadence,
         decoration: const InputDecoration(
           labelText: 'Cadence',
           border: OutlineInputBorder(),
@@ -556,7 +556,7 @@ Future<void> showReminderEditor(
       ),
       sizedBoxH,
       DropdownButtonFormField<String?>(
-        initialValue: cadence,
+        value: cadence,
         decoration: const InputDecoration(
           labelText: 'Repeat',
           border: OutlineInputBorder(),
@@ -674,7 +674,7 @@ Future<void> showBillEditor(
       ),
       sizedBoxH,
       DropdownButtonFormField<String?>(
-        initialValue: cadence,
+        value: cadence,
         decoration: const InputDecoration(
           labelText: 'Repeat',
           border: OutlineInputBorder(),
