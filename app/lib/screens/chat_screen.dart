@@ -51,14 +51,18 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     _ai!.initialize();
   }
 
-  /// Called once the database provider resolves — attach the real repo
-  /// to the controller and load history.
-  void _attachRepoIfReady(ChatController controller, bool isReady) {
-    if (!isReady || _dbWaitStarted) return;
+  /// Called once the database provider resolves — attach the real repo,
+  /// the entity repositories, and the command executor to the controller.
+  /// Then load history.
+  void _attachRepoIfReady(ChatController controller, bool dbReady) {
+    if (!dbReady || _dbWaitStarted) return;
     _dbWaitStarted = true;
     Future.microtask(() async {
       final repo = await ref.read(chatRepositoryProvider.future);
+      final entities = await ref.read(entityRepositoriesProvider.future);
+      final executor = await ref.read(commandExecutorProvider.future);
       controller.attachRepository(repo);
+      controller.attachEntities(entities, executor);
       await controller.load();
       if (mounted) _scrollToBottom();
     });
@@ -67,7 +71,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   @override
   Widget build(BuildContext context) {
     // Watch the DB provider so we know when the controller can switch over.
-    final dbReady = ref.watch(chatRepositoryProvider).hasValue;
+    final dbReady = ref.watch(appDatabaseProvider).hasValue;
     final controller = ref.watch(chatControllerProvider.notifier);
     final state = ref.watch(chatControllerProvider);
 
