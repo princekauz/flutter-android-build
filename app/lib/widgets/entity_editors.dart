@@ -215,7 +215,7 @@ Future<void> showHabitEditor(
               SizedBox(
                 width: 80,
                 child: TextFormField(
-                  value: intervalDays.toString(),
+                  initialValue: intervalDays.toString(),
                   keyboardType: TextInputType.number,
                   decoration: const InputDecoration(
                     border: OutlineInputBorder(),
