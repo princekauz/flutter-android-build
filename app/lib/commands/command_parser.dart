@@ -148,7 +148,14 @@ class CommandParser {
         case 'CREATE_EXPENSE':
           return CreateExpense(
             id: id,
-            label: (json['label'] as String?) ?? '(untitled)',
+            label: _firstNonEmpty([
+              json['label'] as String?,
+              json['title'] as String?,
+              json['description'] as String?,
+              json['name'] as String?,
+              json['what'] as String?,
+            ]) ??
+                '(untitled)',
             amount: (json['amount'] as num?)?.toDouble() ?? 0.0,
             spentOn: _parseDate(json['spent_on']) ?? DateTime.now(),
             category: json['category'] as String?,
@@ -274,7 +281,13 @@ class CommandParser {
           return AddCustomListItem(
             id: id,
             listId: (json['list_id'] as String?) ?? '',
-            label: (json['label'] as String?) ?? '(item)',
+            label: _firstNonEmpty([
+              json['label'] as String?,
+              json['text'] as String?,
+              json['title'] as String?,
+              json['name'] as String?,
+            ]) ??
+                '(item)',
             position: (json['position'] as int?) ?? 0,
           );
         case 'REMOVE_CUSTOM_LIST_ITEM':
@@ -335,6 +348,17 @@ class CommandParser {
       } catch (_) {
         return null;
       }
+    }
+    return null;
+  }
+
+  /// Returns the first non-empty string in the list, or null.
+  ///
+  /// Used so the parser accepts multiple field-name variants the AI
+  /// might use (label / text / title / name / description / what).
+  String? _firstNonEmpty(List<String?> candidates) {
+    for (final s in candidates) {
+      if (s != null && s.trim().isNotEmpty) return s;
     }
     return null;
   }
